@@ -14,7 +14,7 @@ beforeEach(() => {
 const makeEmployee = (overrides: Partial<Employee> = {}): Employee => ({
   _id: '64a1b2c3d4e5f6a7b8c9d0e1',
   name: 'Jane Doe',
-  phone: '1234567890',
+  phone: '12345678',
   isActive: true,
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z',
@@ -63,7 +63,7 @@ describe('initial render', () => {
     const wrapper = mountComponent()
     await flushPromises()
     expect(wrapper.text()).toContain('Jane Doe')
-    expect(wrapper.text()).toContain('1234567890')
+    expect(wrapper.text()).toContain('12345678')
     expect(wrapper.text()).toContain('Active')
   })
 
@@ -100,13 +100,13 @@ describe('addEmployee', () => {
     const wrapper = mountComponent()
     await flushPromises()
     await wrapper.find('input[placeholder="Full Name"]').setValue('Alice')
-    await wrapper.find('input[placeholder="Phone Number"]').setValue('5550001111')
+    await wrapper.find('input[placeholder="Phone Number (8 digits)"]').setValue('55500011')
     const btn = wrapper.find('button.btn-primary')
     expect((btn.element as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('posts to /api/employees and re-fetches on success', async () => {
-    const newEmp = makeEmployee({ name: 'Alice', phone: '5550001111' })
+    const newEmp = makeEmployee({ name: 'Alice', phone: '55500011' })
     mockedAxios.post.mockResolvedValue({ data: newEmp })
     mockedAxios.get
       .mockResolvedValueOnce({ data: [] })
@@ -116,13 +116,13 @@ describe('addEmployee', () => {
     await flushPromises()
 
     await wrapper.find('input[placeholder="Full Name"]').setValue('Alice')
-    await wrapper.find('input[placeholder="Phone Number"]').setValue('5550001111')
+    await wrapper.find('input[placeholder="Phone Number (8 digits)"]').setValue('55500011')
     await wrapper.find('button.btn-primary').trigger('click')
     await flushPromises()
 
     expect(mockedAxios.post).toHaveBeenCalledWith('/api/employees', expect.objectContaining({
       name: 'Alice',
-      phone: '5550001111'
+      phone: '55500011'
     }))
     expect(mockedAxios.get).toHaveBeenCalledTimes(2)
   })
@@ -138,7 +138,7 @@ describe('addEmployee', () => {
 
     const nameInput = wrapper.find<HTMLInputElement>('input[placeholder="Full Name"]')
     await nameInput.setValue('Temp Name')
-    await wrapper.find('input[placeholder="Phone Number"]').setValue('1111111111')
+    await wrapper.find('input[placeholder="Phone Number (8 digits)"]').setValue('11111111')
     await wrapper.find('button.btn-primary').trigger('click')
     await flushPromises()
 
@@ -151,7 +151,7 @@ describe('addEmployee', () => {
     await flushPromises()
 
     await wrapper.find('input[placeholder="Full Name"]').setValue('Name Only')
-    await wrapper.find('input[placeholder="Phone Number"]').setValue('x')
+    await wrapper.find('input[placeholder="Phone Number (8 digits)"]').setValue('12345678')
     await wrapper.find('button.btn-primary').trigger('click')
     await flushPromises()
 
