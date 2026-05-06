@@ -1,0 +1,86 @@
+<div>
+  <!-- Add Employee Form -->
+  <div class="card">
+    <h2>Add Employee</h2>
+    <div class="form-row">
+      <input v-model="form.name" placeholder="Full Name" maxlength="100" />
+      <input v-model="form.phone" placeholder="Phone Number" maxlength="20" />
+      <label class="checkbox-label">
+        <input type="checkbox" v-model="form.isActive" />
+        Active
+      </label>
+      <button @click="addEmployee" class="btn btn-primary" :disabled="!form.name.trim() || !form.phone.trim()">
+        Add Employee
+      </button>
+    </div>
+    <p v-if="formError" class="error">{{ formError }}</p>
+  </div>
+
+  <!-- Employee Table -->
+  <div class="card">
+    <h2>
+      Employees
+      <span class="count">{{ employees.length }}</span>
+    </h2>
+
+    <p v-if="fetchError" class="error">{{ fetchError }}</p>
+
+    <div v-if="loading" class="empty">Loading...</div>
+
+    <table v-else-if="employees.length" class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="emp in employees" :key="emp._id">
+          <!-- View Mode -->
+          <template v-if="editingId !== emp._id">
+            <td>{{ emp.name }}</td>
+            <td>{{ emp.phone }}</td>
+            <td>
+              <span :class="['badge', emp.isActive ? 'badge-active' : 'badge-inactive']">
+                {{ emp.isActive ? 'Active' : 'Inactive' }}
+              </span>
+            </td>
+            <td class="actions">
+              <button @click="startEdit(emp)" class="btn btn-sm btn-edit">Edit</button>
+              <button @click="toggleActive(emp)" class="btn btn-sm btn-toggle">
+                {{ emp.isActive ? 'Deactivate' : 'Activate' }}
+              </button>
+              <button @click="deleteEmployee(emp._id)" class="btn btn-sm btn-danger">Delete</button>
+            </td>
+          </template>
+
+          <!-- Edit Mode -->
+          <template v-else>
+            <td><input v-model="editForm.name" class="inline-input" maxlength="100" /></td>
+            <td><input v-model="editForm.phone" class="inline-input" maxlength="20" /></td>
+            <td>
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="editForm.isActive" />
+                Active
+              </label>
+            </td>
+            <td class="actions">
+              <button
+                @click="saveEdit(emp._id)"
+                class="btn btn-sm btn-primary"
+                :disabled="!editForm.name.trim() || !editForm.phone.trim()"
+              >
+                Save
+              </button>
+              <button @click="cancelEdit" class="btn btn-sm btn-cancel">Cancel</button>
+            </td>
+          </template>
+        </tr>
+      </tbody>
+    </table>
+
+    <p v-else-if="!loading" class="empty">No employees yet. Add one above.</p>
+  </div>
+</div>
