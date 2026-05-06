@@ -2,9 +2,15 @@ import winston from 'winston'
 import morgan from 'morgan'
 import path from 'path'
 import fs from 'fs'
+import { Writable } from 'stream'
 
 const logsDir = path.join(process.cwd(), 'logs')
-if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true })
+
+function ensureLogsDir() {
+  if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true })
+}
+
+ensureLogsDir()
 
 const consoleFormat = winston.format.combine(
   winston.format.colorize(),
@@ -21,12 +27,21 @@ const fileFormat = winston.format.combine(
   winston.format.json()
 )
 
+function makeFileStream(filename: string): Writable {
+  return new Writable({
+    write(chunk: Buffer, _enc: BufferEncoding, cb: (err?: Error | null) => void) {
+      ensureLogsDir()
+      fs.appendFile(filename, chunk, cb)
+    },
+  })
+}
+
 export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   transports: [
     new winston.transports.Console({ format: consoleFormat }),
-    new winston.transports.File({ filename: path.join(logsDir, 'error.log'), level: 'error', format: fileFormat }),
-    new winston.transports.File({ filename: path.join(logsDir, 'combined.log'), format: fileFormat }),
+    new winston.transports.Stream({ stream: makeFileStream(path.join(logsDir, 'error.log')), level: 'error', format: fileFormat }),
+    new winston.transports.Stream({ stream: makeFileStream(path.join(logsDir, 'combined.log')), format: fileFormat }),
   ],
 })
 
