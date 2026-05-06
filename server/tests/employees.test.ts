@@ -100,13 +100,15 @@ describe('POST /api/employees', () => {
     expect(res.body.message).toBeDefined()
   })
 
-  it('returns 400 when phone exceeds 20 characters', async () => {
-    const res = await request(app)
-      .post('/api/employees')
-      .send({ name: 'Valid Name', phone: '1'.repeat(21) })
+  it('returns 400 when phone is not exactly 8 digits', async () => {
+    for (const phone of ['123', '123456789', '1234abcd', '']) {
+      const res = await request(app)
+        .post('/api/employees')
+        .send({ name: 'Valid Name', phone })
 
-    expect(res.status).toBe(400)
-    expect(res.body.message).toBeDefined()
+      expect(res.status).toBe(400)
+      expect(res.body.message).toBeDefined()
+    }
   })
 
   it('trims whitespace from name and phone', async () => {

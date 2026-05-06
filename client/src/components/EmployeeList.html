@@ -4,12 +4,12 @@
     <h2>Add Employee</h2>
     <div class="form-row">
       <input v-model="form.name" placeholder="Full Name" maxlength="100" />
-      <input v-model="form.phone" placeholder="Phone Number" maxlength="20" />
+      <input v-model="form.phone" placeholder="Phone Number (8 digits)" maxlength="8" pattern="\d{8}" inputmode="numeric" />
       <label class="checkbox-label">
         <input type="checkbox" v-model="form.isActive" />
         Active
       </label>
-      <button @click="addEmployee" class="btn btn-primary" :disabled="!form.name.trim() || !form.phone.trim()">
+      <button @click="addEmployee" class="btn btn-primary" :disabled="!form.name.trim() || !/^\d{8}$/.test(form.phone)">
         Add Employee
       </button>
     </div>
@@ -59,7 +59,7 @@
           <!-- Edit Mode -->
           <template v-else>
             <td><input v-model="editForm.name" class="inline-input" maxlength="100" /></td>
-            <td><input v-model="editForm.phone" class="inline-input" maxlength="20" /></td>
+            <td><input v-model="editForm.phone" class="inline-input" maxlength="8" pattern="\d{8}" inputmode="numeric" /></td>
             <td>
               <label class="checkbox-label">
                 <input type="checkbox" v-model="editForm.isActive" />
@@ -70,7 +70,7 @@
               <button
                 @click="saveEdit(emp._id)"
                 class="btn btn-sm btn-primary"
-                :disabled="!editForm.name.trim() || !editForm.phone.trim()"
+                :disabled="!editForm.name.trim() || !/^\d{8}$/.test(editForm.phone)"
               >
                 Save
               </button>
