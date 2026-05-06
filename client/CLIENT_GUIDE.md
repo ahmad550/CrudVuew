@@ -7,6 +7,9 @@
 | `main.ts` → `createApp().mount()` | `Program.cs` → `app.Run()` |
 | `App.vue` | Root layout component (`MainLayout.razor`) |
 | `EmployeeList.vue` | Page component (`EmployeeList.razor`) |
+| `AddEmployeeForm.vue` | Form sub-component (`AddEmployeeForm.razor`) |
+| `EmployeeRow.vue` | Row sub-component (`EmployeeRow.razor`) |
+| `useEmployees.ts` composable | Scoped service / `IEmployeeService` |
 | `<script setup>` | `@code { }` block in Blazor |
 | `ref<T>(value)` | `[Parameter]` / `private T field` with `StateHasChanged()` |
 | `onMounted(fn)` | `OnAfterRenderAsync` / `OnInitializedAsync` |
@@ -14,6 +17,7 @@
 | `v-if` / `v-else` | `@if` / `else` |
 | `v-for="emp in employees"` | `@foreach (var emp in employees)` |
 | `@click="fn"` | `@onclick="fn"` |
+| `emit('event', payload)` | `[Parameter] EventCallback<T>` |
 | `axios` | `HttpClient` |
 | `VITE_API_URL` env var | `appsettings.json` / `IConfiguration` |
 | `vite.config.ts` proxy | YARP / reverse proxy in dev |
@@ -28,13 +32,12 @@
 |---|---|---|
 | `index.html` | `wwwroot/index.html` (Blazor WASM) | Shell HTML, mounts the SPA |
 | `src/main.ts` | `Program.cs` | Create Vue app, attach to DOM |
-| `src/App.vue` | `MainLayout.razor` | Root layout, renders `<EmployeeList>` |
-| `src/App.html` | Razor template fragment | HTML markup for `App.vue` |
-| `src/App.css` | Global CSS / `app.css` | Global reset + layout styles |
+| `src/App.vue` | `MainLayout.razor` | Root layout (inline template + global styles), renders `<EmployeeList>` |
 | `src/types.ts` | C# record / DTO | Shared TypeScript interfaces |
-| `src/components/EmployeeList.vue` | `EmployeeList.razor` (page + code-behind) | All CRUD state and logic |
-| `src/components/EmployeeList.html` | Razor template fragment | HTML markup for `EmployeeList.vue` |
-| `src/components/EmployeeList.css` | Scoped CSS (`EmployeeList.razor.css`) | Scoped component styles |
+| `src/composables/useEmployees.ts` | Scoped service / `IEmployeeService` | All Axios calls + shared reactive state |
+| `src/components/EmployeeList.vue` | `EmployeeList.razor` (page) | Orchestrates `AddEmployeeForm` + table of `EmployeeRow`; owns `editingId` |
+| `src/components/AddEmployeeForm.vue` | `AddEmployeeForm.razor` | Add-employee card; calls composable; emits `submitted` |
+| `src/components/EmployeeRow.vue` | `EmployeeRow.razor` | Single table row with view/edit mode toggle; emits events to parent |
 | `vite.config.ts` | `launchSettings.json` + proxy config | Dev server, API proxy, path aliases |
 | `vitest.config.ts` | `xunit.runner.json` + test host config | Test environment, setup files |
 | `src/tests/setup.ts` | `TestFixture` / `WebApplicationFactory` | Global test setup (stub `confirm`) |
@@ -102,52 +105,194 @@ The split mirrors the CQS pattern — you never send `_id`, `createdAt`, or `upd
 ## src/App.vue — Root Layout (= `MainLayout.razor`)
 
 ```vue
-<template src="./App.html"></template>
+<template>
+  <div id="app">
+    <header class="app-header"><h1>Employee Manager</h1></header>
+    <main>
+      <EmployeeList />
+    </main>
+  </div>
+</template>
 
 <script setup lang="ts">
 import EmployeeList from './components/EmployeeList.vue'
 </script>
 
-<style src="./App.css"></style>
+<style>
+/* global reset + page shell styles */
+</style>
 ```
 
-A Vue SFC (Single File Component) has three sections: template, script, style. Here each section is **externalized** into its own file (`App.html`, `App.css`) for separation — the `.vue` file just wires them together.
+A Vue SFC (Single File Component) has three sections — `<template>`, `<script>`, `<style>` — all inlined in one `.vue` file. This is the idiomatic approach and gives Volar full type-checking inside the template.
 
 `<script setup>` is the Composition API shorthand — everything declared inside is automatically available to the template, similar to `@code { }` in Blazor. Only one import needed: the child component.
 
----
-
-## src/App.html — Root Template Markup
-
-```html
-<div id="app">
-  <header class="app-header"><h1>Employee Manager</h1></header>
-  <main>
-    <EmployeeList />   <!-- renders the child component -->
-  </main>
-</div>
-```
-
-Plain HTML with one `<EmployeeList />` tag. Vue resolves this to the imported component, equivalent to `<EmployeeList />` in Razor. No logic here.
+The `<style>` block here has no `scoped` attribute, so styles apply globally — equivalent to a site-wide `app.css`. Scoped styles (using `<style scoped>`) only apply to the current component's elements.
 
 ---
 
-## src/App.css — Global Styles
-
-CSS reset (`box-sizing`, `margin`, `padding`) plus layout for the page shell (`max-width: 960px`, centered). Applied globally — not scoped to a component.
-
----
-
-## src/components/EmployeeList.vue — Main Component (= `EmployeeList.razor`)
-
-This is the entire application. All reactive state, all API calls, all event handlers live here — no Vuex/Pinia store, no router, no services. Equivalent to a Blazor page component with `@code { }` that injects `HttpClient` directly.
-
-### Reactive State (= Blazor `private` fields that trigger re-render)
+## src/composables/useEmployees.ts — Shared API Logic (= `IEmployeeService`)
 
 ```typescript
-const employees  = ref<Employee[]>([])       // the list rendered in the table
-const loading    = ref<boolean>(false)       // shows "Loading..." row
-const fetchError = ref<string>('')           // error from GET/DELETE/PUT
+const employees = ref<Employee[]>([])   // shared across all callers
+const loading   = ref<boolean>(false)
+const fetchError = ref<string>('')
+const formError  = ref<string>('')
+
+export function useEmployees() {
+  async function fetchEmployees() { ... }   // GET /api/employees
+  async function addEmployee(form) { ... }  // POST — returns boolean success
+  async function saveEdit(id, form) { ... } // PUT  — returns boolean success
+  async function deleteEmployee(id) { ... } // DELETE — returns boolean success
+  async function toggleActive(emp) { ... }  // PUT with inverted isActive
+
+  return { employees, loading, fetchError, formError,
+           fetchEmployees, addEmployee, saveEdit, deleteEmployee, toggleActive }
+}
+```
+
+A **composable** is a function that encapsulates reusable reactive logic — equivalent to a scoped service in .NET DI. The four `ref`s are declared **outside** the function body, which makes them module-level singletons: every component that calls `useEmployees()` shares the same reactive state (employees list, errors, loading flag). This is intentional — `AddEmployeeForm` and `EmployeeList` see the same `employees` array and `formError`.
+
+The `API` constant (`import.meta.env.VITE_API_URL + '/employees'`) also lives here, keeping all HTTP concerns in one place.
+
+---
+
+## src/components/EmployeeList.vue — Orchestrator Component (= `EmployeeList.razor`)
+
+This component is the page-level orchestrator. It owns only one piece of local state (`editingId`) and delegates all API work to the `useEmployees` composable and all rendering to child components.
+
+```vue
+<template>
+  <div>
+    <AddEmployeeForm />          <!-- add-employee card -->
+    <div class="card">
+      <h2>Employees <span class="count">{{ employees.length }}</span></h2>
+      <p v-if="fetchError" class="error">{{ fetchError }}</p>
+      <div v-if="loading" class="empty">Loading...</div>
+      <table v-else-if="employees.length" class="table">
+        <thead>...</thead>
+        <tbody>
+          <EmployeeRow
+            v-for="emp in employees" :key="emp._id"
+            :emp="emp" :editingId="editingId"
+            @edit="startEdit"
+            @cancel-edit="cancelEdit"
+            @save-edit="handleSaveEdit"
+            @delete="handleDelete"
+            @toggle-active="toggleActive"
+          />
+        </tbody>
+      </table>
+      <p v-else-if="!loading" class="empty">No employees yet.</p>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useEmployees } from '../composables/useEmployees'
+import AddEmployeeForm from './AddEmployeeForm.vue'
+import EmployeeRow from './EmployeeRow.vue'
+import type { Employee, EmployeeForm } from '../types'
+
+const { employees, loading, fetchError, fetchEmployees,
+        saveEdit, deleteEmployee, toggleActive } = useEmployees()
+
+const editingId = ref<string | null>(null)
+// ...event handlers...
+onMounted(fetchEmployees)
+</script>
+```
+
+### What lives here vs. in child components
+
+| Concern | Owner |
+|---|---|
+| Full employee list, loading flag, fetch error | `useEmployees` composable |
+| Form state, form error, `addEmployee` call | `AddEmployeeForm.vue` |
+| Row-level view/edit toggle, `editForm` | `EmployeeRow.vue` |
+| Which row is currently editing (`editingId`) | `EmployeeList.vue` |
+| PUT / DELETE API calls | `useEmployees` composable (called from `EmployeeList.vue`) |
+
+### Event flow (child → parent → composable)
+
+`EmployeeRow` emits typed events upward; `EmployeeList` listens and calls the composable:
+
+```
+EmployeeRow emits 'save-edit'
+  → EmployeeList.handleSaveEdit(id, form)
+    → composable.saveEdit(id, form)        // PUT request
+      → composable.fetchEmployees()        // refresh list
+```
+
+This is equivalent to `EventCallback<T>` in Blazor: child components don't call services directly — they raise an event and let the parent coordinate.
+
+---
+
+## src/components/AddEmployeeForm.vue — Add-Employee Card
+
+Props: none — owns its own local `form` ref.  
+Emits: `submitted` (after a successful POST).  
+Uses: `useEmployees()` — calls `addEmployee`, reads `formError`.
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useEmployees } from '../composables/useEmployees'
+
+const emit = defineEmits<{ submitted: [] }>()
+const { formError, addEmployee } = useEmployees()
+const form = ref<EmployeeForm>({ name: '', phone: '', isActive: true })
+
+async function submit() {
+  const ok = await addEmployee(form.value)
+  if (ok) {
+    form.value = { name: '', phone: '', isActive: true }   // reset form
+    emit('submitted')
+  }
+}
+</script>
+```
+
+The form is disabled via `:disabled` binding when `name` is blank or `phone` is not exactly 8 digits — a UX guard, not a security measure (server validates too).
+
+---
+
+## src/components/EmployeeRow.vue — Table Row Component
+
+Props: `emp: Employee`, `editingId: string | null`  
+Emits: `edit`, `cancel-edit`, `save-edit`, `delete`, `toggle-active`  
+No direct API calls — events bubble up to `EmployeeList`.
+
+```vue
+<script setup lang="ts">
+import { ref, watch } from 'vue'
+import type { Employee, EmployeeForm } from '../types'
+
+const props = defineProps<{ emp: Employee; editingId: string | null }>()
+const emit = defineEmits<{
+  edit: [emp: Employee]
+  'cancel-edit': []
+  'save-edit': [id: string, form: EmployeeForm]
+  delete: [id: string]
+  'toggle-active': [emp: Employee]
+}>()
+
+const editForm = ref<EmployeeForm>({ ... })   // local copy for the inline edit inputs
+
+watch(() => props.editingId, (id) => {
+  if (id === props.emp._id) {
+    editForm.value = { name: props.emp.name, phone: props.emp.phone, isActive: props.emp.isActive }
+  }
+})
+</script>
+```
+
+The `watch` on `editingId` resets `editForm` to the current employee values whenever this row enters edit mode — a defensive copy so the user can cancel without mutating the displayed data.
+
+The `<template v-if>` / `<template v-else>` blocks toggle between view mode (three `<td>` cells with text + buttons) and edit mode (inputs inside the cells) without adding extra DOM elements.
+
+---
 const formError  = ref<string>('')           // error from POST
 
 const form       = ref<EmployeeForm>({ name: '', phone: '', isActive: true })  // add form
@@ -270,67 +415,6 @@ onMounted(fetchEmployees)
 ```
 
 = `protected override async Task OnAfterRenderAsync(bool firstRender)` with the `if (firstRender)` guard. Runs once after the component is inserted into the DOM — triggers the initial data load.
-
----
-
-## src/components/EmployeeList.html — Template Markup
-
-The template is split into two logical sections:
-
-### Add Employee form (top card)
-
-```html
-<input v-model="form.name" ... />          <!-- two-way bind to form.name -->
-<button @click="addEmployee" :disabled="!form.name.trim() || !form.phone.trim()">
-```
-
-- `v-model` = `@bind` — syncs input value ↔ reactive variable in both directions
-- `:disabled` (colon prefix = dynamic attribute binding) = `disabled="@(!...)"` in Razor
-- The button is disabled client-side when either field is empty — a UX guard, not a security measure (server validates too)
-
-### Employee table (bottom card)
-
-```html
-<div v-if="loading">Loading...</div>
-
-<table v-else-if="employees.length">
-  <tr v-for="emp in employees" :key="emp._id">
-
-    <!-- View mode -->
-    <template v-if="editingId !== emp._id">
-      <td>{{ emp.name }}</td>
-      ...
-    </template>
-
-    <!-- Edit mode -->
-    <template v-else>
-      <td><input v-model="editForm.name" /></td>
-      ...
-    </template>
-
-  </tr>
-</table>
-
-<p v-else-if="!loading">No employees yet.</p>
-```
-
-- `v-if` / `v-else-if` / `v-else` = `@if` / `else if` / `else` chain
-- `v-for="emp in employees" :key="emp._id"` = `@foreach` with a stable key (like React's `key` prop) — helps the virtual DOM reconcile updates efficiently
-- `{{ emp.name }}` = `@emp.Name` — interpolation
-- The `<template>` tag is a logical wrapper with no DOM output, used to toggle between view and edit mode per row without wrapping `<td>` cells in an extra element
-
----
-
-## src/components/EmployeeList.css — Scoped Component Styles
-
-Declared with `<style scoped>` in the `.vue` file, meaning these class names are **only applied to this component's elements** — Vue adds a unique attribute selector automatically. Equivalent to `EmployeeList.razor.css` in Blazor which scopes styles to the component.
-
-Key classes:
-- `.card` — white rounded panel (used for both the form and the table)
-- `.badge-active` / `.badge-inactive` — green/red pill for the status column
-- `.btn`, `.btn-primary`, `.btn-danger`, etc. — button variants (no external CSS library)
-- `.inline-input` — the input shown inside the edit-mode table cell
-- `.error` — red banner for API error messages
 
 ---
 

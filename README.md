@@ -40,21 +40,28 @@ CrudVuew/
 ├── server/
 │   ├── .env                  # PORT, MONGO_URI, CLIENT_URL
 │   ├── package.json
-│   ├── index.js              # Express app entry point
+│   ├── index.ts              # Express app entry point
+│   ├── app.ts                # Middleware + route wiring
+│   ├── logger.ts             # Winston logger
 │   ├── models/
-│   │   └── Employee.js       # Mongoose schema (name, phone, isActive)
+│   │   └── Employee.ts       # Mongoose schema (name, phone, isActive)
 │   └── routes/
-│       └── employees.js      # CRUD REST API routes
+│       └── employees.ts      # CRUD REST API routes
 └── client/
     ├── .env                  # VITE_API_URL
     ├── package.json
     ├── index.html
-    ├── vite.config.js        # Vite config + dev proxy
+    ├── vite.config.ts        # Vite config + dev proxy
     └── src/
-        ├── main.js
-        ├── App.vue
+        ├── main.ts
+        ├── App.vue           # Root layout (inline template + styles)
+        ├── types.ts          # Shared Employee / EmployeeForm interfaces
+        ├── composables/
+        │   └── useEmployees.ts   # All API calls + shared reactive state
         └── components/
-            └── EmployeeList.vue  # Full CRUD UI
+            ├── EmployeeList.vue  # Table view — orchestrates child components
+            ├── AddEmployeeForm.vue  # Add-employee card
+            └── EmployeeRow.vue     # Single table row (view + edit mode)
 ```
 
 ---
